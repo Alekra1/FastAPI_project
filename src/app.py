@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Response
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -30,3 +30,13 @@ async def create_item(item_id: int, item: Item):
         return item
     else:
         raise HTTPException(status_code=409, detail="item with this id already exists")
+
+@app.put("/items", response_model=Item, status_code=200)
+async def update_item(item: Item, response: Response):
+    if item.id not in _db:
+        response.status_code = status.HTTP_201_CREATED
+
+    _db[item.id] = item
+    
+    return _db[item.id]
+

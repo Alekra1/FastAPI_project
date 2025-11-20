@@ -23,20 +23,35 @@ async def get_item(item_id: int):
     else:
         raise HTTPException(status_code=404, detail="item not found")
 
-@app.post("/items/{item_id}", status_code=status.HTTP_201_CREATED, response_model=Item)
-async def create_item(item_id: int, item: Item):
-    if item_id not in _db:
-        _db.update({item_id : item})
-        return item
-    else:
-        raise HTTPException(status_code=409, detail="item with this id already exists")
-
-@app.put("/items", response_model=Item, status_code=200)
-async def update_item(item: Item, response: Response):
-    if item.id not in _db:
-        response.status_code = status.HTTP_201_CREATED
+@app.post("/items", status_code=201, response_model=Item)
+async def create_item(item: Item):
+    if item.id in _db:
+        raise HTTPException (
+            status_code = 409,
+            detail = "item already exists"
+        )
 
     _db[item.id] = item
-    
-    return _db[item.id]
 
+    return item
+
+@app.put("/items/{item_id}", response_model=Item, status_code=200)
+async def update_item(item_id: int, item: Item, response: Response):
+    item.id = item_id
+
+    if item_id not in _db:
+        response.status_code = status.HTTP_201_CREATED
+
+    _db[item_id] = item
+    return item
+
+@app.delete("/items/{item_id}", status_code=204)
+async def delete_item(item_id: int, response: Response):
+    if item_id not in _db:
+        raise HTTPException (
+            status_code = 404,
+            detail = "item not found"
+        )
+    else:
+        _db.pop(item_id)
+        return

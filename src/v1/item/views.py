@@ -1,27 +1,23 @@
+from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, Response
+from fastapi import Query, Response
 from fastapi.routing import APIRouter
-from pydantic import BaseModel
 from starlette.responses import JSONResponse
 
+from v1.pydantic.models import Pagination
+
+from .models import Item
+
 router = APIRouter(prefix="/items")
-
-
-class Item(BaseModel):
-    id: None | UUID = None
-    name: str
 
 
 _db: dict[UUID, Item] = {}
 
 
 @router.get("", response_model=list[Item])
-async def get_items(limit: int = 1, offset: int = 0):
-    items = list(_db.values())
-    if limit < 0 or limit + offset > len(items):
-        raise HTTPException(status_code=400, detail="Requested limit is out of range")
-    return items[offset : offset + limit]
+async def get_items(pagination: Annotated[Pagination, Query()]):
+    return Item.paginate(pagination, _db)
 
 
 @router.get("/{item_id}", response_model=Item)

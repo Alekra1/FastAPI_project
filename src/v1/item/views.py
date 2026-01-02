@@ -1,56 +1,78 @@
-from typing import Annotated
+from typing import Annotated, List
 from uuid import UUID, uuid4
 
-from fastapi import Query, Response
-from fastapi.routing import APIRouter
-from starlette.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse, Response
 
+from domain.item.exceptions import ItemNotFoundError
+from domain.item.models import Item, ItemCreateDTO, ItemUpdateDTO
+from domain.item.repository import AbstractItemRepository
+from infrastructure.repositories.inmemory.item import InMemoryItemRepository
+from v1.item.models import (
+    ItemCreateSchema,
+    ItemListSchema,
+    ItemSchema,
+    ItemUpdateSchema,
+)
 from v1.pydantic.models import Pagination
-
-from .models import Item
 
 router = APIRouter(prefix="/items")
 
-
-_db: dict[UUID, Item] = {}
-
-
-@router.get("", response_model=list[Item])
-async def get_items(pagination: Annotated[Pagination, Query()]):
-    return Item.paginate(pagination, _db)
+_item_repo = InMemoryItemRepository()
 
 
-@router.get("/{item_id}", response_model=Item)
-async def get_item(item_id: UUID):
-    if item_id in _db:
-        return _db[item_id]
-    else:
-        return JSONResponse({"message": "Item not found!"}, status_code=404)
+def get_item_repo():
+    return _item_repo
 
 
-@router.post("", response_model=Item, status_code=201)
-async def create_item(item: Item):
-    if item.id is None:
-        item.id = uuid4()
-    if item.id in _db:
-        return JSONResponse({"message": "Item already exists"}, status_code=409)
-    _db[item.id] = item
+@router.post("", response_model=Item)
+def create_item(
+    payload: ItemCreateSchema, repo: AbstractItemRepository = Depends(get_item_repo)
+):
+    dto = ItemCreateDTO(name=payload.name, description=payload.description)
+    item = repo.create(dto)
+
+    # item_schema = ItemSchema(
+    #     id=item.id,
+    #     name=item.name,
+    #     description=item.description,
+    # )
+
     return item
 
 
-@router.put("/{item_id}", response_model=Item, status_code=200)
-async def update_item(item_id: UUID, item: Item, response: Response):
-    item.id = item_id
-    if item.id not in _db:
-        response.status_code = 201
-    _db[item.id] = item
+@router.get("", response_model=List[Item])
+def list_items(
+    pagination: Pagination = Depends(),
+    repo: AbstractItemRepository = Depends(get_item_repo),
+):
+    items = repo.list(limit=pagination.limit, offset=pagination.offset)
+
+    return items
+
+
+@router.patch("/{item_id}")
+def update_item(
+    item_id: UUID,
+    payload: ItemUpdateSchema,
+    repo: AbstractItemRepository = Depends(get_item_repo),
+):
+    dto = ItemUpdateDTO(name=payload.name, description=payload.description)
+
+    try:
+        item = repo.update(item_id, dto)
+    except ItemNotFoundError as exc:
+        print(exc)
+        raise HTTPException(status_code=404, detail="Item not found")
+
     return item
 
 
 @router.delete("/{item_id}", status_code=204)
-async def delete_item(item_id: UUID):
-    if item_id not in _db:
-        return JSONResponse({"message": "Item not found"}, status_code=404)
-    else:
-        del _db[item_id]
-        return
+def delete_item(item_id: UUID, repo: AbstractItemRepository = Depends(get_item_repo)):
+    try:
+        repo.delete(item_id)
+    except ItemNotFoundError as exc:
+        print(exc)
+        raise HTTPException(status_code=404, detail="Item not found")
+    return

@@ -1,8 +1,20 @@
 from uuid import UUID
 
-from v1.pydantic.mixins import BaseModel
+from pydantic import BaseModel, Field
 
 
-class Item(BaseModel):
-    id: None | UUID = None
-    name: str
+class ItemListSchema(BaseModel):
+    id: UUID | None = None
+    name: str = "Item Name"
+
+
+class ItemSchema(ItemListSchema):
+    description: str = "Item Description"
+
+
+class ItemCreateSchema(BaseModel):
+    name: str = Field(min_length=1, max_length=25)
+    description: str = Field(min_length=1)
+
+
+class ItemUpdateSchema(ItemCreateSchema): ...
